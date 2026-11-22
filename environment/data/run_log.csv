@@ -1,0 +1,13 @@
+file,crucible,sample_mass_mg,gross_mass_before_mg,gross_mass_after_mg
+IN_check_1Kmin.txt,HP-11,5.543,1067.01,1067.01
+IN_check_5Kmin.txt,HP-12,5.763,1065.47,1065.48
+IN_check_10Kmin.txt,HP-13,5.055,1083.84,1083.84
+INT4_dyn_0p5Kmin.txt,HP-21,6.580,1074.20,1074.19
+INT4_dyn_1Kmin.txt,HP-22,6.755,1052.72,1052.73
+INT4_dyn_2Kmin.txt,HP-23,6.920,1086.16,1086.17
+INT4_dyn_4Kmin.txt,HP-24,5.609,1100.31,1100.32
+INT4_dyn_8Kmin.txt,HP-25,5.458,1062.37,1062.36
+INT4_iso_140C.txt,HP-31,10.602,1105.33,1105.31
+INT4_iso_150C.txt,HP-32,12.568,1117.28,1117.28
+INT4_iso_160C.txt,HP-33,13.830,1078.21,1078.21
+INT4_iso_170C.txt,HP-34,13.610,1114.20,1114.18

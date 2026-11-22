@@ -1,0 +1,82 @@
+schema_version = "1.4"
+
+artifacts = ["/app/output/assessment.json"]
+
+[task]
+name = "afterquery/dsc-tmrad-assessment"
+description = "From the DSC study of a stabilised, autocatalytically decomposing intermediate, determine the heat of decomposition, the adiabatic time to maximum rate at four start temperatures and the temperature at which it is 24 hours."
+authors = [{ name = "Kenny Situ", email = "kenny658ai@gmail.com" }]
+keywords = ["process-safety", "thermal-runaway", "dsc", "reaction-kinetics", "autocatalysis", "stabiliser-depletion", "tmrad"]
+
+[metadata]
+author_name = "Kenny Situ"
+author_email = "kenny658ai@gmail.com"
+author_organization = "Independent Researcher"
+author_profile = "https://www.linkedin.com/in/kenny-s-657a691b1/"
+conflicts_of_interest = "None"
+domain = "engineering-sciences"
+field = "chemical-engineering"
+subfield = "thermal process safety and decomposition kinetics"
+category = "Science"
+subcategory = "Chemical & Biomolecular Engineering"
+tags = ["process-safety", "thermal-runaway", "dsc", "reaction-kinetics", "autocatalysis", "stabiliser-depletion", "tmrad"]
+expert_time_estimate_hours = 12
+relevant_experience = """
+I have audited a reactor protection logic solver after a proof test where the cause-and-effect matrix said a 2oo3 high pressure vote tripped the feed valve after a two second delay.
+In the as-built logic the delay started when the first transmitter crossed, before the vote had formed.
+We found it by lining the historian log up against the matrix scan by scan.
+That work was on the protection side of a reactor, where the trip settings rest on how fast the contents can run away.
+This task is the step before it: working out from calorimetry how long a decomposing material takes to reach its maximum rate, which is the number the safeguards are designed around.
+"""
+difficulty_explanation = """
+Process safety chemists and engineers do this when a thermal stability assessment is written for a reactive intermediate: DSC runs are turned into a heat of decomposition, an adiabatic time to maximum rate (TMRad) and the temperature at which it is 24 hours (TD24), and storage and process temperatures are set from them.
+
+The data is SYNTHETIC.
+A seeded simulation produces the DSC exports of a commercial grade that carries a stabiliser: the stabiliser is consumed first and holds back an autocatalytic decomposition while it lasts, and a consecutive step gives a second exotherm.
+The instrument has as-found temperature and heat-flow scale errors that only the shipped indium check reveals, a signal lag, run-specific baselines with a heat-capacity step, a melting endotherm, a settling transient and noise.
+The export format, temperature programmes, crucible weighings and the size of the effects follow real DSC practice.
+
+The difficulty is in the kinetics and the extrapolation.
+The answers are needed 10 to 30 K below the coolest isothermal run, where TMRad is governed by how long the stabiliser lasts, and its depletion has a much higher activation energy than the decomposition.
+An autocatalytic model with an initiation term can also produce an induction period, so the stabiliser has to be recognised from how the induction time and the peak scale with temperature, and modelled.
+A global two-step autocatalytic fit without it reproduces the scans and gives TMRad at 110 C of 21 h against a true 64 h and TD24 10 K too low.
+Reading the induction period off a conversion threshold as a delay gives 35 h.
+The temperature and heat-flow scales must be corrected from the indium check before any kinetics.
+"""
+solution_explanation = """
+solution/solve.py first reads the three indium runs: the temperature offset is the melting onset extrapolated to zero heating rate, the heat-flow scale comes from the peak area against 28.62 J/g, and the signal time constant from the decay after the peak. Every INT-4 run is corrected with them.
+It then fits one kinetic model to all nine INT-4 runs at once: a stabiliser consumed at a zero-order rate, smoothed near exhaustion, that inhibits an autocatalytic first step by a factor 1/(1 + Ki s), followed by a consecutive n-th order step, each step with its own heat.
+The model is integrated along each run's measured temperature programme with RK4, the signal lag is applied to the dynamic scans, and each run's baseline (offset, slope and a heat-capacity step proportional to conversion) is eliminated inside the residual by linear least squares.
+Start values for the stabiliser come from an Arrhenius line through the induction times; the fit is staged (stabiliser and first step on the isothermal runs, then the second step, then all thirteen parameters).
+The fitted model is integrated adiabatically from material as supplied with the stated heat capacity to get TMRad at the four start temperatures, and TD24 is the root of TMRad(T) = 24 h.
+"""
+verification_explanation = """
+The ground truth comes from integrating the generator's own kinetic model in authoring/provenance/generate.py: total heat 930.0 J/g, TMRad 63.78, 20.69, 7.23 and 2.72 h at 110, 120, 130 and 140 C, and TD24 118.64 C. No fitted value or solver output is part of it.
+The tests read only /app/output/assessment.json, require exactly the stated keys with finite positive numbers, reject links, duplicate keys and non-finite numbers, and require the heat within 4 percent, each TMRad within 30 percent and TD24 within 3.0 K.
+
+The bounds were set from three correct routes.
+The reference reaches at most 0.07 of any tolerance.
+A variant of the reference with a different stabiliser law (first-order depletion, squared inhibition) reaches at most 0.17.
+authoring/evidence/independent_solver.py, written separately, uses only the isothermal conversion curves, a first-order stabiliser with exponential inhibition, hand-built baselines and no second step, and reaches at most 0.66 (TMRad at 110 C, 20 percent low).
+TMRad at 110 C is an extrapolation 30 K below the data, where a 5 kJ/mol change in the stabiliser's activation energy moves it by about 16 percent, so the TMRad bound is 30 percent.
+Two wrong routes fail: a global two-step autocatalytic fit without the stabiliser reaches 3.31 of the TD24 tolerance and 2.21 of the TMRad tolerance at 110 C, and a delay read off a 1 percent conversion threshold reaches 1.52 and 1.50.
+Values a wrong route clears are named one by one in authoring/evidence/calibration.md and the README: the heat is cleared by every route, TMRad at 140 C by both wrong routes and TMRad at 130 C by the threshold delay; TMRad at 110 and 120 C and TD24 are cleared only by routes that model the stabiliser.
+"""
+
+[verifier]
+timeout_sec = 600.0
+environment_mode = "separate"
+
+[verifier.environment]
+network_mode = "no-network"
+
+[agent]
+timeout_sec = 28800.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+gpus = 0
+network_mode = "public"
