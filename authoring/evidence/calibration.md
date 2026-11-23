@@ -9,12 +9,12 @@ Produced with
         standard_fit=$O/standard_fit_assessment.json \
         threshold_delay=$O/threshold_delay_assessment.json
 
-Each output file was written by the script of the same name on the shipped data:
+Each output file was written by the script listed for it below, run on the shipped data:
 
 | attempt | script | what it does |
 |---|---|---|
 | reference | `solution/solve.py` | calibration correction, global fit of all runs with stabiliser depletion (zero order, smoothed) inhibiting an autocatalytic step, plus a consecutive step |
-| independent | `authoring/evidence/independent_solver.py` | separately written; isothermal conversion curves only, first-order stabiliser depletion with exponential inhibition, hand-built baselines, no second step |
+| independent | `authoring/evidence/independent_solver.py` | separately written; kinetics from the isothermal conversion curves only (the dynamic scans give the total heat), first-order stabiliser depletion with exponential inhibition, hand-built baselines, no second step |
 | stabiliser_variant | `authoring/evidence/stabiliser_variant.py` | the reference pipeline with a different stabiliser law (first-order depletion, squared inhibition term) |
 | standard_fit | `authoring/evidence/standard_fit.py` | calibration correction and a global two-step autocatalytic fit with no stabiliser |
 | threshold_delay | `authoring/evidence/threshold_delay.py` | treats the induction period as a delay equal to the time to 1 % conversion, Arrhenius-extrapolated, then a Kamal-Sourour runaway |
@@ -38,20 +38,21 @@ Value and error as a fraction of its tolerance (1.00 is the pass boundary).
 | standard_fit | 2 | 3.31 | fail |
 | threshold_delay | 3 | 1.52 | fail |
 
-Graded values a wrong route clears
+## Graded values a wrong route clears
 
 - `delta_h_j_per_g` is cleared by every route, including `standard_fit`
   (0.96 of the tolerance). It only needs the dynamic scans integrated after the
   calibration correction. It is graded because the assessment needs it, not to
   separate routes.
 - `tmrad_h["140"]` is cleared by `standard_fit` (0.92) and `threshold_delay`
-  (0.18). At 140 °C the stabiliser is used up quickly and its kinetics matter
-  little.
+  (0.18). 140 °C is the temperature of the coolest isothermal run: there the
+  induction time is measured rather than extrapolated, so even a fit without
+  stabiliser kinetics comes within the tolerance.
 - `tmrad_h["130"]` is cleared by `threshold_delay` (0.60).
 - `tmrad_h["110"]`, `tmrad_h["120"]` and `td24_c` are cleared only by the
   routes that model the stabiliser. They carry the separation.
 
-Why the tolerances are what they are
+## Why the tolerances are what they are
 
 - The time to maximum rate at 110 °C is extrapolated about 30 K below the
   coolest isothermal run. There, a 5 kJ/mol change in the stabiliser's
@@ -60,7 +61,8 @@ Why the tolerances are what they are
   110 °C, so the bound is 30 % and not tighter.
 - `td24_c` is bounded at 3.0 K; the correct routes span -1.6 K to -0.2 K, the
   wrong routes are -4.6 K and -9.9 K.
-- `delta_h_j_per_g` is bounded at 4 %; the correct routes span 0.0 % to +0.3 %.
+- `delta_h_j_per_g` is bounded at 4 %; the correct routes span -0.1 % to +0.3 %.
 
-Verifier checks run by hand: reference and independent outputs give 4 of 4
-tests passing, standard_fit gives 2 of 4, and no file gives 0 of 4.
+Verifier checks run by hand: the reference, independent and stabiliser_variant
+outputs give 4 of 4 tests passing, standard_fit and threshold_delay give 2 of 4,
+and a missing output file gives 0 of 4.

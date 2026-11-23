@@ -2,14 +2,17 @@
 """Variant of the reference with a different stabiliser law (first-order depletion,
 squared inhibition term), used to check that the answer does not hinge on the law.
 
-Reference solution: global kinetic model fit of all DSC runs, then adiabatic prediction.
+As in solution/solve.py: global kinetic model fit of all INT-4 DSC runs, then adiabatic prediction.
 
 Model: a stabiliser that is consumed first and inhibits the decomposition while
 it lasts, an autocatalytic first step with an initiation term, and an n-th order
 consecutive step that gives the second exotherm.
-Every run is fitted at once. The instrument baseline of each run (offset,
-slope and a heat-capacity step proportional to conversion) enters linearly and
-is eliminated inside the residual, so no manual baseline construction is needed.
+Every run is fitted at once. The instrument baseline of each run (an offset, and
+on the dynamic scans also a slope and a heat-capacity step proportional to
+conversion) enters linearly and is eliminated inside the residual, so no manual
+baseline construction is needed.
+
+usage: stabiliser_variant.py <data_dir> <out.json>
 """
 import glob
 import json
@@ -71,7 +74,7 @@ def calibration(data):
 
 
 def closed_runs(data):
-    """Files whose crucible kept its mass (loss below 1 % of the sample mass)."""
+    """Files whose crucible kept its mass (loss below 1 % of the sample mass plus 0.05 mg of weighing scatter)."""
     ok = set()
     with open(os.path.join(data, "run_log.csv")) as fh:
         next(fh)
@@ -149,11 +152,11 @@ def simulate(run, p):
     return X1, R1, R2
 
 
-TAU = [20.0]
+TAU = [None]          # signal time constant in s, set from the indium check in main()
 
 
 def residuals(runs, P, steps):
-    """P (B,10): 8 kinetic parameters, H1, H2. Baselines are projected out per run."""
+    """P (B,13): 8 kinetic parameters, H1, H2, then the stabiliser (lnkS, ES, lnKi). Baselines are projected out per run."""
     B = P.shape[0]
     out = []
     for run in runs:
@@ -276,7 +279,7 @@ def main():
                 best = (x, c)
     x = best[0]
     print("stage A", np.round(x, 4), best[1], flush=True)
-    # stage B: step 2 on all runs with step 1 frozen, then everything free
+    # stage B: step 2 on all runs with step 1 and the stabiliser frozen, then everything free
     x, c = fit(runs, x, lo, hi, 2, [5, 6, 7, 9])
     print("stage B", np.round(x, 4), c, flush=True)
     x, c = fit(runs, x, lo, hi, 2, list(range(13)))

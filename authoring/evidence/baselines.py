@@ -8,6 +8,7 @@ import os
 import sys
 
 task = os.path.abspath(sys.argv[1])
+sys.dont_write_bytecode = True        # keep tests/ free of __pycache__
 sys.path.insert(0, os.path.join(task, "tests"))
 import test_outputs as V  # noqa: E402
 

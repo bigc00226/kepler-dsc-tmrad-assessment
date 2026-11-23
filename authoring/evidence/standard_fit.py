@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Reference solution: global kinetic model fit of all DSC runs, then adiabatic prediction.
+"""Wrong route kept as evidence: the reference pipeline with the stabiliser left out of the model.
+
+This is not a correct method. It runs the same calibration correction, global fit of all
+INT-4 DSC runs and adiabatic prediction as solution/solve.py, but without the stabiliser,
+and shows which graded values such a fit still clears; see authoring/evidence/calibration.md.
 
 Model: autocatalytic first step with an initiation term, followed by an
 n-th order consecutive step (the usual choice when isothermal runs show an
 induction period and the dynamic scans show a second exotherm).
-Every run is fitted at once. The instrument baseline of each run (offset,
-slope and a heat-capacity step proportional to conversion) enters linearly and
-is eliminated inside the residual, so no manual baseline construction is needed.
+Every run is fitted at once. The instrument baseline of each run (an offset, and
+on the dynamic scans also a slope and a heat-capacity step proportional to
+conversion) enters linearly and is eliminated inside the residual, so no manual
+baseline construction is needed.
+
+usage: standard_fit.py <data_dir> <out.json>
 """
 import glob
 import json
@@ -68,7 +75,7 @@ def calibration(data):
 
 
 def closed_runs(data):
-    """Files whose crucible kept its mass (loss below 1 % of the sample mass)."""
+    """Files whose crucible kept its mass (loss below 1 % of the sample mass plus 0.05 mg of weighing scatter)."""
     ok = set()
     with open(os.path.join(data, "run_log.csv")) as fh:
         next(fh)
@@ -139,7 +146,7 @@ def simulate(run, p):
     return X1, R1, R2
 
 
-TAU = [20.0]
+TAU = [None]          # signal time constant in s, set from the indium check in main()
 
 
 def residuals(runs, P, steps):
@@ -236,7 +243,6 @@ def main():
         r["y"] = r["y"] / scale        # true heat flow
         runs.append(prepare(r))
     iso = [r for r in runs if r["iso"]]
-    # rough total heat from the slowest dynamic scan with a straight baseline, as a start value
     # order: lnk1, E1, n1, m, lnz, lnk2, E2, n2, H1, H2
     x0 = [math.log(1e-3), 100e3, 1.0, 1.0, math.log(0.03), math.log(3e-3), 130e3, 1.0, 600.0, 300.0]
     lo = [math.log(1e-5), 40e3, 0.3, 0.3, math.log(1e-4), math.log(1e-5), 50e3, 0.3, 100.0, 0.0]

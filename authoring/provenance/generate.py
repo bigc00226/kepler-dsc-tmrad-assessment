@@ -2,8 +2,11 @@
 """Seeded generator for the DSC decomposition study.
 
 Writes
-  <out>/environment/data/dsc/*.txt     DSC exports (dynamic and isothermal runs)
+  <out>/environment/data/dsc/*.txt     DSC exports (indium check, dynamic and isothermal runs)
+  <out>/environment/data/run_log.csv   crucible weighings of every run
   <out>/tests/truth.json               ground truth from the kinetic model itself
+  <out>/authoring/provenance/generator_internal.json
+                                       kinetic and instrument parameters, for audit only
 
 Kinetic model (the "plant"):
   stabiliser       consumed        ds/dt  = -kS(T) s/(s+0.02),  s = 1 as supplied
@@ -63,7 +66,7 @@ def rates(T, x1, x2, st):
     return r1, r2, rs
 
 
-def run_program(tgrid, Tfun, leak=None):
+def run_program(tgrid, Tfun):
     def f(t, y):
         r1, r2, rs = rates(Tfun(t), y[0], y[1], y[2])
         return [r1, r2, -rs]
@@ -97,7 +100,7 @@ def tmrad(T0c):
     return float(tt[int(np.argmax(rate))] / 3600.0)
 
 
-def write_export(path, name, mass, rng_line, seg_line, T, t, w_per_g_signal):
+def write_export(path, name, sample, mass, rng_line, seg_line, T, t, w_per_g_signal):
     with open(path, "w", encoding="utf-8", newline="") as fh:
         hdr = [
             "#EXPORTTYPE:DATA ALL",
@@ -110,7 +113,7 @@ def write_export(path, name, mass, rng_line, seg_line, T, t, w_per_g_signal):
             "#INSTRUMENT:NETZSCH DSC 214",
             "#PROJECT:Intermediate INT-4 thermal stability",
             "#LABORATORY:Process Safety Lab",
-            "#SAMPLE:INT-4 batch 0427",
+            f"#SAMPLE:{sample}",
             f"#SAMPLE MASS /mg:{mass:.3f}",
             "#CRUCIBLE:High pressure, gold plated, sealed",
             "#SAMPLE CRUCIBLE MASS /mg:0",
@@ -126,7 +129,7 @@ def write_export(path, name, mass, rng_line, seg_line, T, t, w_per_g_signal):
             fh.write(f"{a:.3f};{b:.5f};{c:.6f}\r\n")
 
 
-def measure(rng, t, T, x1, q, mass_mg, beta_k_s, iso, extra=None):
+def measure(rng, t, T, x1, q, mass_mg, beta_k_s, iso):
     """Turn the model heat release (W/g) into the exported signal (mW/mg, exo up)."""
     m = mass_mg * 1e-3                                    # g
     cp_s = 1.60 - 0.35 * x1                               # J/(g K), reactant -> products
@@ -135,8 +138,6 @@ def measure(rng, t, T, x1, q, mass_mg, beta_k_s, iso, extra=None):
     b = rng.uniform(-0.12e-6, 0.12e-6)
     base = base + a + b * (T - 373.15)
     phi = m * q + base
-    if extra is not None:
-        phi = phi + m * extra
     if not iso:
         sig = 1.0 + 0.15 * beta_k_s * 60.0
         phi = phi - m * H_FUS * beta_k_s * np.exp(-0.5 * ((T - 273.15 - T_MELT - 0.4 * beta_k_s * 60.0) / sig) ** 2) / (sig * math.sqrt(2 * math.pi))
@@ -177,21 +178,24 @@ def main(out):
     ddir = os.path.join(out, "environment", "data", "dsc")
     os.makedirs(ddir, exist_ok=True)
     os.makedirs(os.path.join(out, "tests"), exist_ok=True)
+    os.makedirs(os.path.join(out, "authoring", "provenance"), exist_ok=True)
     info = {}
     log = []
 
-    def log_run(name, crucible, mass, loss_frac):
+    def log_run(name, crucible, mass):
+        """Gross crucible mass before and after the run; every crucible stayed closed."""
         tare = float(rng.uniform(1040.0, 1110.0))
         before = tare + mass
-        after = before - loss_frac * mass + float(rng.normal(0, 0.012))
+        after = before + float(rng.normal(0, 0.012))
         log.append(f"{name}.txt,{crucible},{mass:.3f},{before:.2f},{after:.2f}")
 
     for q, beta in enumerate([1.0, 5.0, 10.0]):
         mass = float(rng.uniform(5.0, 7.0))
         Tm_, t_, y_ = indium_run(rng, beta, mass)
         name = f"IN_check_{beta:g}Kmin"
-        write_export(os.path.join(ddir, name + ".txt"), name, mass, f"140\u00b0C/{beta:.1f}(K/min)/175\u00b0C", "S1/1", Tm_, t_, y_)
-        log_run(name, f"HP-{11 + q:02d}", mass, 0.0)
+        write_export(os.path.join(ddir, name + ".txt"), name, "Indium", mass, f"140\u00b0C/{beta:.1f}(K/min)/175\u00b0C", "S1/1",
+                     Tm_, t_, y_)
+        log_run(name, f"HP-{11 + q:02d}", mass)
     # dynamic runs
     for q, (beta, step) in enumerate([(0.5, 8), (1.0, 4), (2.0, 2), (4.0, 2), (8.0, 1)]):
         b = beta / 60.0
@@ -199,43 +203,31 @@ def main(out):
         t = np.arange(0, (380.0 - 30.0) / b + dt, dt)
         Tfun = lambda tt, b=b: 303.15 + b * tt
         mass = float(rng.uniform(4.0, 9.0))
-        leak, extra, loss = None, None, 0.0
-        if False:
-            tl = (186.0 - 30.0) / b
-            leak = (tl, 0.85, 0.70)
-            extra = -70.0 * np.exp(-0.5 * ((t - tl - 20.0) / 14.0) ** 2) / (14.0 * math.sqrt(2 * math.pi))
-            loss = 0.21
-        T, x1, x2, qh = run_program(t, Tfun, leak)
-        y = measure(rng, t, T, x1, qh, mass, b, False, extra)
+        T, x1, x2, qh = run_program(t, Tfun)
+        y = measure(rng, t, T, x1, qh, mass, b, False)
         Tm = T - 273.15 + T_OFF + rng.normal(0, 0.01, T.size)
         name = f"INT4_dyn_{beta:g}Kmin".replace(".", "p")
-        write_export(os.path.join(ddir, name + ".txt"), name, mass,
+        write_export(os.path.join(ddir, name + ".txt"), name, "INT-4 batch 0427", mass,
                      f"30\u00b0C/{beta:.1f}(K/min)/380\u00b0C", "S1/1", Tm[::step], t[::step], y[::step])
-        info[name] = {"mass_mg": mass, "peak_T": float(T[np.argmax(qh)] - 273.15), "peak_q": float(qh.max()), "leak": leak is not None}
-        log_run(name, f"HP-{21 + q:02d}", mass, loss)
+        info[name] = {"mass_mg": mass, "peak_T": float(T[np.argmax(qh)] - 273.15), "peak_q": float(qh.max())}
+        log_run(name, f"HP-{21 + q:02d}", mass)
     # isothermal runs
     for q, (Tc, hours, step) in enumerate([(140.0, 16.0, 8), (150.0, 9.0, 4), (160.0, 5.0, 4), (170.0, 3.0, 2)]):
         ramp = 100.0 / 60.0
         t_r = (Tc - 100.0) / ramp
         dt = 0.5
         t = np.arange(0, t_r + hours * 3600.0 + dt, dt)
-        Tfun = lambda tt, Tc=Tc, t_r=t_r, ramp=ramp: np.minimum(373.15 + ramp * np.asarray(tt), Tc + 273.15)
+        Tfun = lambda tt, Tc=Tc, ramp=ramp: np.minimum(373.15 + ramp * np.asarray(tt), Tc + 273.15)
         mass = float(rng.uniform(10.0, 14.0))
-        leak, extra, loss = None, None, 0.0
-        if False:
-            tl = t_r + 38.0 * 60.0
-            leak = (tl, 0.45, 0.80)
-            extra = -55.0 * np.exp(-0.5 * ((t - tl - 25.0) / 16.0) ** 2) / (16.0 * math.sqrt(2 * math.pi))
-            loss = 0.14
-        T, x1, x2, qh = run_program(t, Tfun, leak)
+        T, x1, x2, qh = run_program(t, Tfun)
         keep = t >= t_r
-        y = measure(rng, t[keep], T[keep], x1[keep], qh[keep], mass, 0.0, True, None if extra is None else extra[keep])
+        y = measure(rng, t[keep], T[keep], x1[keep], qh[keep], mass, 0.0, True)
         Tm = T[keep] - 273.15 + T_OFF + rng.normal(0, 0.01, keep.sum())
         name = f"INT4_iso_{Tc:.0f}C"
-        write_export(os.path.join(ddir, name + ".txt"), name, mass,
+        write_export(os.path.join(ddir, name + ".txt"), name, "INT-4 batch 0427", mass,
                      f"{Tc:.0f}\u00b0C/{hours:.1f}h isothermal", "S1/1", Tm[::step], (t[keep] - t_r)[::step], y[::step])
-        info[name] = {"mass_mg": mass, "leak": leak is not None}
-        log_run(name, f"HP-{31 + q:02d}", mass, loss)
+        info[name] = {"mass_mg": mass}
+        log_run(name, f"HP-{31 + q:02d}", mass)
     with open(os.path.join(out, "environment", "data", "run_log.csv"), "w") as fh:
         fh.write("file,crucible,sample_mass_mg,gross_mass_before_mg,gross_mass_after_mg\n" + "\n".join(log) + "\n")
     tm = {f"{int(T0)}": tmrad(T0) for T0 in T_STARTS}

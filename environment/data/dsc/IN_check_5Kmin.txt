@@ -8,7 +8,7 @@
 #INSTRUMENT:NETZSCH DSC 214
 #PROJECT:Intermediate INT-4 thermal stability
 #LABORATORY:Process Safety Lab
-#SAMPLE:INT-4 batch 0427
+#SAMPLE:Indium
 #SAMPLE MASS /mg:5.763
 #CRUCIBLE:High pressure, gold plated, sealed
 #SAMPLE CRUCIBLE MASS /mg:0

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Second, separately written solver used only to calibrate the tolerances.
+"""Wrong route kept as evidence: the induction period taken as a delay read off a conversion threshold.
+
+This is not a correct method. It shows which graded values a route that does not model the
+stabiliser still clears; see authoring/evidence/calibration.md.
 
 Differences from solution/solve.py
   * no stabiliser kinetics: the induction period is treated as a delay. The
@@ -12,9 +15,15 @@ Differences from solution/solve.py
     second exotherm is not modelled at all
   * baselines are built by hand: end-of-run offset for isothermal runs,
     tangential sigmoid for the dynamic scans (used for the total heat only)
-  * the adiabatic prediction uses the first-step heat measured isothermally
+  * calibration: steepest-tangent onset of indium, lowest over the rates, and
+    the mean peak area; no correction for signal lag
+  * runs whose gross mass fell by more than 0.2 mg are left out (none in the
+    shipped data)
+  * the adiabatic prediction uses the first-step heat measured isothermally:
+    TMRad is the extrapolated delay plus the time to maximum rate of the
+    Kamal-Sourour runaway started from 1 % conversion
 
-usage: independent_solver.py <data_dir> <out.json>
+usage: threshold_delay.py <data_dir> <out.json>
 """
 import glob
 import json
@@ -84,7 +93,7 @@ def ks_curve(p, T, tt):
 
 
 def indium_check(data):
-    """Offset from the steepest-tangent onset (mean over the rates), scale from the peak area."""
+    """Offset from the steepest-tangent onset (lowest over the rates), scale from the mean peak area."""
     ons, areas = [], []
     for f in sorted(glob.glob(os.path.join(data, "dsc", "IN_check_*.txt"))):
         _, Tc, t, y = load(f)

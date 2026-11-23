@@ -15,8 +15,8 @@ The data are synthetic and disclosed as such. A seeded simulation
 (`authoring/provenance/generate.py`) produces the DSC exports of a commercial
 grade that carries a stabiliser: the stabiliser is consumed first and holds
 back an autocatalytic decomposition while it lasts, and a consecutive step
-gives a second exotherm. The instrument has as-found temperature and heat-flow
-scale errors that only the shipped indium check reveals, a signal lag from the
+gives a second exotherm. The exports carry as-found temperature and heat-flow
+scale errors that the shipped indium check quantifies, a signal lag from the
 high-pressure crucibles, run-specific baselines with a heat-capacity step, a
 melting endotherm, a settling transient on the isothermal runs, and noise. The
 export format, temperature programmes, crucible weighings and the size of the
@@ -24,7 +24,7 @@ effects follow real DSC practice.
 
 The difficulty is in the kinetics and the extrapolation:
 
-- The answers are needed 10 to 30 K below the coolest isothermal run. In that
+- The answers are needed up to 30 K below the coolest isothermal run. In that
   range TMRad is governed by how long the stabiliser lasts, and its depletion
   has a much higher activation energy than the decomposition itself.
 - The isothermal runs show a flat induction period followed by an
@@ -43,7 +43,8 @@ The difficulty is in the kinetics and the extrapolation:
 
 ## Reference solution
 
-`solution/solve.py`, run by `solution/solve.sh`, about six minutes on one core.
+`solution/solve.py`, run by `solution/solve.sh`, single-threaded: under half an
+hour on one core (26 minutes of CPU time measured on a cloud vCPU).
 
 1. From the three indium runs: the temperature offset as the melting onset
    extrapolated to zero heating rate, the heat-flow scale from the peak area,
@@ -54,10 +55,11 @@ The difficulty is in the kinetics and the extrapolation:
    autocatalytic first step by a factor 1/(1 + Ki s), followed by a
    consecutive n-th order step, each step with its own heat. The model is
    integrated along each run's measured temperature programme, the signal lag
-   is applied to the dynamic scans, and each run's baseline (offset, slope and
-   a heat-capacity step proportional to conversion) is eliminated inside the
-   residual by linear least squares. Start values for the stabiliser come from
-   an Arrhenius line through the induction times.
+   is applied to the dynamic scans, and each run's baseline (an offset, and on
+   the dynamic scans also a slope and a heat-capacity step proportional to
+   conversion) is eliminated inside the residual by linear least squares.
+   Start values for the stabiliser come from an Arrhenius line through the
+   induction times.
 3. The fitted model is integrated adiabatically from material as supplied with
    the stated heat capacity to get TMRad, and TD24 is the root of
    TMRad(T) = 24 h.
@@ -68,20 +70,21 @@ Ground truth is `tests/truth.json`, obtained by integrating the generator's
 own kinetic model: total heat 930.0 J/g, TMRad 63.78, 20.69, 7.23 and 2.72 h
 at 110, 120, 130 and 140 °C, TD24 118.64 °C. No fitted value is part of it.
 
-`tests/test_outputs.py` reads only `/app/output/assessment.json`. It requires a
-regular file of at most 100 kB with exactly the keys `delta_h_j_per_g`,
-`tmrad_h` (keys `"110"`, `"120"`, `"130"`, `"140"`) and `td24_c`, all finite
-positive numbers; links, duplicate keys, NaN and infinity are rejected. The
-heat must be within 4 %, each TMRad within 30 % and TD24 within 3.0 K.
+`tests/test_outputs.py` reads only `/app/output/assessment.json` from the
+agent's run and compares it with `tests/truth.json`. It requires a regular file
+of at most 100 kB with exactly the keys `delta_h_j_per_g`, `tmrad_h` (keys
+`"110"`, `"120"`, `"130"`, `"140"`) and `td24_c`, all finite positive numbers;
+links, duplicate keys, NaN and infinity are rejected. The heat must be within
+4 %, each TMRad within 30 % and TD24 within 3.0 K.
 
 The bounds were set from three correct routes: the reference, a variant of it
 with a different stabiliser law, and `authoring/evidence/independent_solver.py`,
-written separately, which uses only the isothermal conversion curves, a
-first-order stabiliser with exponential inhibition, hand-built baselines and no
-second step. TMRad at 110 °C is an extrapolation 30 K below the data, where a
-5 kJ/mol change in the stabiliser's activation energy moves it by about 16 %;
-the correct routes span -20 % to -2 % there, hence 30 %. Error as a fraction of
-the tolerance, from `authoring/evidence/calibration.md`:
+written separately, which uses only the isothermal conversion curves for the
+kinetics, a first-order stabiliser with exponential inhibition, hand-built
+baselines and no second step. TMRad at 110 °C is an extrapolation 30 K below
+the data, where a 5 kJ/mol change in the stabiliser's activation energy moves
+it by about 16 %; the correct routes span -20 % to -2 % there, hence 30 %.
+Error as a fraction of the tolerance, from `authoring/evidence/calibration.md`:
 
 | route | heat | TMRad 110 | TMRad 120 | TMRad 130 | TMRad 140 | TD24 | outcome |
 |---|---|---|---|---|---|---|---|
@@ -96,7 +99,9 @@ Graded values a wrong route clears, named one by one:
 - The heat of decomposition is cleared by every route; it only needs the
   dynamic scans integrated after the calibration correction.
 - TMRad at 140 °C is cleared by both wrong routes, and TMRad at 130 °C by the
-  threshold delay. Near the measured range the stabiliser matters little.
+  threshold delay. Near the measured range little is extrapolated: 140 °C is
+  the temperature of the coolest isothermal run, so even routes without
+  stabiliser kinetics come close there.
 - TMRad at 110 and 120 °C and TD24 are cleared only by routes that model the
   stabiliser; they carry the separation.
 

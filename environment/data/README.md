@@ -5,7 +5,7 @@ every run.
 
 ## Material
 
-All INT-4 samples are taken from production batch 0427 as supplied. The
+All INT-4 samples were taken from production batch 0427 as supplied. The
 commercial grade contains about 0.4 wt% of a phenolic stabiliser; it was not
 removed for any run.
 

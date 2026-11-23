@@ -6,14 +6,18 @@ file (numpy 2.5.3, scipy 1.18.1). From the task root:
     python3 authoring/provenance/generate.py .
 
 rewrites `environment/data/dsc/`, `environment/data/run_log.csv`,
-`tests/truth.json` and `generator_internal.json` (kinetic and instrument
-parameters, for audit only).
+`tests/truth.json` and `authoring/provenance/generator_internal.json` (kinetic
+and instrument parameters, for audit only).
 
 The generator's kinetics: a stabiliser that is consumed (zero order, smoothed
 near exhaustion) and inhibits an autocatalytic first step while it lasts, and
-a consecutive n-th order second step. The instrument applies an as-found
-temperature offset, a heat-flow scale error, a signal lag, a run-specific
-baseline with a heat-capacity step, a melting endotherm and noise.
+a consecutive n-th order second step. The measurement model applies an
+as-found temperature offset, a heat-flow scale error, a signal lag, a
+run-specific baseline with a heat-capacity step, the sample's melting
+endotherm, a settling transient on the isothermal runs and noise. In the
+simulation the sample follows each programme in true temperature and the
+as-found error sits in the exported temperature channel, so every exported
+temperature reads the as-found offset above its `#RANGE` programme.
 
 The ground truth is obtained by integrating the generator's own kinetic model:
 the sum of the two step heats, the adiabatic time to maximum rate at the four
