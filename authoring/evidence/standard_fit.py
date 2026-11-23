@@ -221,7 +221,7 @@ def tmrad_h(p, T0c):
     def done(t, y):
         return y[0] - 0.999
     done.terminal = True
-    s = solve_ivp(rhs, (0, 5e7), [0.0, 0.0], method="LSODA", rtol=1e-9, atol=1e-13, events=done, max_step=3600.0,
+    s = solve_ivp(rhs, (0, 5e8), [0.0, 0.0], method="LSODA", rtol=1e-9, atol=1e-13, events=done, max_step=3600.0,
                   dense_output=True)
     te = s.t_events[0][0]
     tt = np.unique(np.clip(np.concatenate([np.linspace(0, te, 3000), te - np.geomspace(1e-3, min(3600.0, te), 5000)]), 0, te))

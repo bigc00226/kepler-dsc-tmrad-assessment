@@ -9,7 +9,9 @@ Writes
                                        kinetic and instrument parameters, for audit only
 
 Kinetic model (the "plant"):
-  stabiliser       consumed        ds/dt  = -kS(T) s/(s+0.02),  s = 1 as supplied
+  stabiliser       consumed        ds/dt  = -(kSa(T) + kSb(T)) s/(s+0.02),  s = 1 as supplied
+                   by two routes: a (high activation energy) dominates above about 145 C,
+                   b (low activation energy) below it
   step 1  A -> B   autocatalytic   dx1/dt = k1(T) (1-x1)^n1 (z + x1^m) / (1 + Ki s)
   step 2  B -> C   n-th order      dx2/dt = k2(T) (x1-x2)^n2
   heat release per gram            q = H1 dx1/dt + H2 dx2/dt
@@ -29,9 +31,9 @@ from scipy.signal import lfilter
 
 SEED = 7741903
 R = 8.314462618
-K = dict(E1=96.0e3, k1ref=1.6e-3, T1ref=433.15, n1=1.3, m=0.9, z=0.012, H1=620.0,
+K = dict(E1=130.0e3, k1ref=5.5e-3, T1ref=433.15, n1=1.3, m=0.9, z=0.012, H1=620.0,
          E2=135.0e3, k2ref=3.7e-3, T2ref=538.15, n2=1.1, H2=310.0,
-         ES=148.0e3, kSref=4.2e-4, TSref=423.15, Ki=400.0)
+         ESa=200.0e3, kSaref=2.5e-4, ESb=70.0e3, kSbref=1.7e-4, TSref=423.15, Ki=400.0)
 CP_MASS = 1.90            # J/(g K), stated in the instruction
 TAU_S = 20.0              # signal time constant with the high-pressure crucible, s
 T_OFF = 3.6               # as-found temperature scale error, K (indicated - true)
@@ -51,7 +53,9 @@ def k2(T):
 
 
 def kS(T):
-    return K["kSref"] * np.exp(-K["ES"] / R * (1.0 / T - 1.0 / K["TSref"]))
+    """Total stabiliser consumption rate constant: route a plus route b."""
+    return (K["kSaref"] * np.exp(-K["ESa"] / R * (1.0 / T - 1.0 / K["TSref"]))
+            + K["kSbref"] * np.exp(-K["ESb"] / R * (1.0 / T - 1.0 / K["TSref"])))
 
 
 def rates(T, x1, x2, st):

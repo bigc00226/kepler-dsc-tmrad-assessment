@@ -9,9 +9,12 @@ rewrites `environment/data/dsc/`, `environment/data/run_log.csv`,
 `tests/truth.json` and `authoring/provenance/generator_internal.json` (kinetic
 and instrument parameters, for audit only).
 
-The generator's kinetics: a stabiliser that is consumed (zero order, smoothed
-near exhaustion) and inhibits an autocatalytic first step while it lasts, and
-a consecutive n-th order second step. The measurement model applies an
+The generator's kinetics: a stabiliser that is consumed by two parallel routes
+(each zero order, smoothed near exhaustion; route a with a high activation
+energy, route b with a low one) and inhibits an autocatalytic first step while
+it lasts, and a consecutive n-th order second step. The two routes are about
+equal near 145 °C; route a dominates above it (89 % of the consumption at
+170 °C) and route b below it (62 % at 140 °C, 97 % at 110 °C). The measurement model applies an
 as-found temperature offset, a heat-flow scale error, a signal lag, a
 run-specific baseline with a heat-capacity step, the sample's melting
 endotherm, a settling transient on the isothermal runs and noise. In the

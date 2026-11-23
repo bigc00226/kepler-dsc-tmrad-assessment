@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Reference solution: global kinetic model fit of all INT-4 DSC runs, then adiabatic prediction.
 
-Model: a stabiliser that is consumed first and inhibits the decomposition while
-it lasts, an autocatalytic first step with an initiation term, and an n-th order
+Model: a stabiliser that is consumed by two parallel routes with different
+activation energies and inhibits the decomposition while it lasts, an
+autocatalytic first step with an initiation term, and an n-th order
 consecutive step that gives the second exotherm.
 Every run is fitted at once. The instrument baseline of each run (an offset, and
 on the dynamic scans also a slope and a heat-capacity step proportional to
 conversion) enters linearly and is eliminated inside the residual, so no manual
-baseline construction is needed.
+baseline construction is needed. The model is first fitted with a single
+consumption route; the second route is then added, and the drop in the
+residual shows that the data need it.
 
 usage: solve.py <data_dir> <out.json>   (solution/solve.sh passes /app/data /app/output/assessment.json)
 """
@@ -101,14 +104,14 @@ def prepare(run, npts=700):
 
 
 def rate_fn(p):
-    """p (B,13): step 1, step 2, heats, then stabiliser (lnkS, ES, lnKi)."""
+    """p (B,15): step 1, step 2, heats, stabiliser route a (lnkSa, ESa), lnKi, route b (lnkSb, ESb)."""
     lk1, E1, n1, m, lz, lk2, E2, n2 = [p[:, i] for i in range(8)]
-    lkS, ES, lKi = p[:, 10], p[:, 11], p[:, 12]
+    lkSa, ESa, lKi, lkSb, ESb = p[:, 10], p[:, 11], p[:, 12], p[:, 13], p[:, 14]
 
     def f(T, x1, x2, st):
         k1 = np.exp(lk1 - E1 / R * (1.0 / T - 1.0 / T1REF))
         k2 = np.exp(lk2 - E2 / R * (1.0 / T - 1.0 / T2REF))
-        kS = np.exp(lkS - ES / R * (1.0 / T - 1.0 / TSREF))
+        kS = np.exp(lkSa - ESa / R * (1.0 / T - 1.0 / TSREF)) + np.exp(lkSb - ESb / R * (1.0 / T - 1.0 / TSREF))
         a = np.clip(1.0 - x1, 0.0, 1.0)
         c = np.clip(x1, 0.0, 1.0)
         b = np.clip(x1 - x2, 0.0, 1.0)
@@ -119,7 +122,7 @@ def rate_fn(p):
 
 
 def simulate(run, p):
-    """RK4 on the binned grid (with sub-steps). p (B,13) -> x1, r1, r2 arrays (B,N)."""
+    """RK4 on the binned grid (with sub-steps). p (B,15) -> x1, r1, r2 arrays (B,N)."""
     f = rate_fn(p)
     B = p.shape[0]
     t, T = run["t"], run["T"]
@@ -153,7 +156,7 @@ TAU = [None]          # signal time constant in s, set from the indium check in 
 
 
 def residuals(runs, P, steps):
-    """P (B,13): 8 kinetic parameters, H1, H2, then the stabiliser (lnkS, ES, lnKi). Baselines are projected out per run."""
+    """P (B,15): 8 kinetic parameters, H1, H2, then the stabiliser (lnkSa, ESa, lnKi, lnkSb, ESb). Baselines are projected out per run."""
     B = P.shape[0]
     out = []
     for run in runs:
@@ -247,7 +250,7 @@ def main():
         runs.append(prepare(r))
     iso = [r for r in runs if r["iso"]]
     # The isothermal runs show a flat induction period before the autocatalytic peak, and the
-    # induction time changes with temperature far more steeply than the peak itself: the
+    # induction time changes with temperature more steeply than the peak itself: the
     # as-supplied stabiliser has to be consumed first. Start values for its depletion rate come
     # from an Arrhenius fit of the induction times (signal first reaching 10 % of its peak).
     Ti, ti = [], []
@@ -261,11 +264,16 @@ def main():
     ES0 = float(np.clip(-sl * R, 60e3, 250e3))
     lkS0 = float(ic + sl / TSREF)
     print("induction times", np.round(ti, 0), "start ES %.0f" % ES0, flush=True)
-    # order: lnk1, E1, n1, m, lnz, lnk2, E2, n2, H1, H2, lnkS, ES, lnKi
-    x0 = [math.log(1e-3), 100e3, 1.0, 1.0, math.log(0.03), math.log(3e-3), 130e3, 1.0, 600.0, 300.0, lkS0, ES0, math.log(100.0)]
-    lo = [math.log(1e-5), 40e3, 0.3, 0.3, math.log(1e-4), math.log(1e-5), 50e3, 0.3, 100.0, 0.0, math.log(1e-7), 50e3, math.log(1.0)]
-    hi = [math.log(1e-1), 200e3, 3.0, 3.0, math.log(0.5), math.log(1e-1), 300e3, 3.0, 2000.0, 2000.0, math.log(1e-1), 300e3, math.log(1e5)]
-    # stage A: stabiliser and step 1 on the isothermal runs
+    # order: lnk1, E1, n1, m, lnz, lnk2, E2, n2, H1, H2, lnkSa, ESa, lnKi, lnkSb, ESb
+    # route b starts switched off (lnkSb at its lower bound) and is freed in stage D
+    lkSb_off = math.log(1e-12)
+    x0 = [math.log(1e-3), 100e3, 1.0, 1.0, math.log(0.03), math.log(3e-3), 130e3, 1.0, 600.0, 300.0, lkS0, ES0, math.log(100.0),
+          lkSb_off, 100e3]
+    lo = [math.log(1e-5), 40e3, 0.3, 0.3, math.log(1e-4), math.log(1e-5), 50e3, 0.3, 100.0, 0.0, math.log(1e-7), 50e3, math.log(1.0),
+          lkSb_off, 20e3]
+    hi = [math.log(1e-1), 200e3, 3.0, 3.0, math.log(0.5), math.log(1e-1), 300e3, 3.0, 2000.0, 2000.0, math.log(1e-1), 300e3, math.log(1e5),
+          math.log(1e-1), 300e3]
+    # stage A: one consumption route and step 1 on the isothermal runs
     best = None
     for z0 in (0.005, 0.03):
         for k0 in (5e-4, 3e-3):
@@ -276,11 +284,26 @@ def main():
                 best = (x, c)
     x = best[0]
     print("stage A", np.round(x, 4), best[1], flush=True)
-    # stage B: step 2 on all runs with step 1 and the stabiliser frozen, then everything free
+    # stage B: step 2 on all runs with step 1 and the stabiliser frozen
     x, c = fit(runs, x, lo, hi, 2, [5, 6, 7, 9])
     print("stage B", np.round(x, 4), c, flush=True)
-    x, c = fit(runs, x, lo, hi, 2, list(range(13)))
-    print("stage C", np.round(x, 4), c, flush=True)
+    # stage C: everything free on all runs, still with one consumption route
+    x, c1 = fit(runs, x, lo, hi, 2, list(range(13)))
+    print("stage C (one route)", np.round(x, 4), c1, flush=True)
+    # stage D: a second consumption route. The one-route activation energy is a compromise between
+    # the isothermal runs and the slow dynamic scans, so route a starts above it and route b below it.
+    kS1, ES1 = math.exp(x[10]), x[11]
+    best = None
+    for fa, fb, ma, mb in ((0.6, 0.4, 1.2, 0.5), (0.6, 0.4, 1.1, 0.7)):
+        xs = x.copy()
+        xs[10], xs[11] = math.log(fa * kS1), min(ma * ES1, 290e3)
+        xs[13], xs[14] = math.log(fb * kS1), max(mb * ES1, 25e3)
+        xd, c = fit(runs, xs, lo, hi, 2, list(range(15)))
+        if best is None or c < best[1]:
+            best = (xd, c)
+    x, c2 = best
+    print("stage D (two routes)", np.round(x, 4), c2, flush=True)
+    print("residual norm: one route %.5f, two routes %.5f" % (c1, c2), flush=True)
     res = {
         "delta_h_j_per_g": float(x[8] + x[9]),
         "tmrad_h": {str(T0): tmrad_h(x, float(T0)) for T0 in STARTS},
